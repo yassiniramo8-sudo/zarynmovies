@@ -1,0 +1,1 @@
+ALTER TABLE public.highlights ADD COLUMN IF NOT EXISTS summary_type text NOT NULL DEFAULT 'sport';

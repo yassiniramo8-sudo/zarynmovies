@@ -1,0 +1,52 @@
+project_id = "zjlsmwcrenzdvdkfyhdx"
+
+[functions.manage-expired-users]
+verify_jwt = false
+
+[functions.notify-new-content]
+verify_jwt = false
+
+[functions.send-email-campaign]
+verify_jwt = false
+
+[functions.ai-movie-search]
+verify_jwt = false
+
+[functions.ai-article-generator]
+verify_jwt = false
+
+[functions.ai-admin-chat]
+verify_jwt = false
+
+[functions.ai-moderate-comment]
+verify_jwt = false
+
+[functions.ai-recommendations]
+verify_jwt = false
+
+[functions.ai-highlight-search]
+verify_jwt = false
+
+[functions.ai-news-generator]
+verify_jwt = false
+
+[functions.ai-content-scanner]
+verify_jwt = false
+
+[functions.rss-news-aggregator]
+verify_jwt = false
+
+[functions.generate-rss-feed]
+verify_jwt = false
+
+[functions.entertainment-ai]
+verify_jwt = false
+
+[functions.translate-news]
+verify_jwt = false
+
+[functions.translate-content]
+verify_jwt = false
+
+[functions.auto-translate]
+verify_jwt = false

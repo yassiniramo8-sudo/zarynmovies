@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS news_translations_unique_idx ON public.news_translations (news_id, language);

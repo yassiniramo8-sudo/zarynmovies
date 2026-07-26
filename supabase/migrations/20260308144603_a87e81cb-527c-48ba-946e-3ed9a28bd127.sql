@@ -1,0 +1,1 @@
+ALTER TABLE public.subscription_plans ADD COLUMN features jsonb NOT NULL DEFAULT '[]'::jsonb;

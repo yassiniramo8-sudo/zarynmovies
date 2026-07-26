@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS content_translations_unique_idx ON public.content_translations (content_id, content_type, language);

@@ -1,0 +1,1 @@
+ALTER TABLE public.content_translations ADD COLUMN IF NOT EXISTS genre text[] DEFAULT '{}'::text[];
