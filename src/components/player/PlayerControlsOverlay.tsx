@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Maximize2, Minimize2, PictureInPicture2 } from "lucide-react";
+import { Maximize2, Minimize2, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -56,33 +56,23 @@ export default function PlayerControlsOverlay({
     }
   }, [containerSelector]);
 
-  const togglePip = useCallback(async () => {
+  const toggleLandscapeFullscreen = useCallback(async () => {
     try {
-      const container = document.querySelector(containerSelector);
-      if (!container) {
-        toast.info("Player is not ready yet.");
+      const el = document.querySelector(containerSelector) as HTMLElement | null;
+      if (!el) {
+        toast.error("Player container not found.");
         return;
       }
-      // Look for a native <video> element inside the container.
-      const video = container.querySelector("video");
-      if (!video) {
-        // Iframe stream — PiP is not available from the parent frame.
-        toast.info("This streaming server does not support Picture-in-Picture.");
-        return;
+      // Request fullscreen on the player container
+      if (!document.fullscreenElement && typeof el.requestFullscreen === "function") {
+        await el.requestFullscreen();
       }
-      const doc = document as Document & {
-        pictureInPictureElement?: Element | null;
-        exitPictureInPicture?: () => Promise<void>;
-      };
-      if (doc.pictureInPictureElement) {
-        await doc.exitPictureInPicture?.();
-      } else if (typeof (video as HTMLVideoElement & { requestPictureInPicture?: () => Promise<PictureInPictureWindow> }).requestPictureInPicture === "function") {
-        await (video as HTMLVideoElement & { requestPictureInPicture: () => Promise<PictureInPictureWindow> }).requestPictureInPicture();
-      } else {
-        toast.info("This streaming server does not support Picture-in-Picture.");
+      // Lock screen orientation to landscape (mobile/tablets)
+      if (screen.orientation && typeof screen.orientation.lock === "function") {
+        await screen.orientation.lock("landscape").catch(() => {});
       }
     } catch {
-      toast.info("This streaming server does not support Picture-in-Picture.");
+      toast.error("Could not enter landscape fullscreen mode.");
     }
   }, [containerSelector]);
 
@@ -93,15 +83,15 @@ export default function PlayerControlsOverlay({
         className,
       )}
     >
-      {/* Picture-in-Picture button */}
+      {/* Landscape fullscreen button (forces orientation lock) */}
       <button
         type="button"
-        onClick={togglePip}
-        aria-label="Picture in Picture"
-        title="Picture in Picture"
+        onClick={toggleLandscapeFullscreen}
+        aria-label="Landscape fullscreen"
+        title="Landscape fullscreen"
         className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-110 hover:border-primary/60 hover:bg-black/60 hover:shadow-[0_0_18px_-4px_hsl(var(--primary))] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
-        <PictureInPicture2 className="h-4 w-4 transition-transform group-hover:scale-110" />
+        <RotateCw className="h-4 w-4 transition-transform group-hover:scale-110" />
       </button>
 
       {/* Fullscreen button */}
