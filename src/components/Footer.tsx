@@ -47,7 +47,7 @@ export function Footer() {
           {/* Brand */}
           <div className="space-y-3">
             <Link to="/" className="flex items-center gap-2">
-              <img src={logoUrl || "/logo.png"} alt="zarynmovies" className="h-8 w-8 rounded" />
+              <img src={logoUrl || "/favicon.png"} alt="zarynmovies" className="h-8 w-8 rounded" />
               <span className="text-lg font-bold text-foreground">zarynmovies</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">{t.tagline}</p>

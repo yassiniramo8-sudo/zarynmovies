@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-const DEFAULT_LOGO = "/logo.png";
+const DEFAULT_LOGO = "/favicon.png";
 
 export function useSiteLogo() {
   const [logoUrl, setLogoUrl] = useState(DEFAULT_LOGO);

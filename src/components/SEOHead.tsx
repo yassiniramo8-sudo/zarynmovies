@@ -16,7 +16,7 @@ interface SEOHeadProps {
 }
 
 const SITE_NAME = "Zaryn Movies";
-const DEFAULT_IMAGE = "/logo.png";
+const DEFAULT_IMAGE = "/favicon.png";
 
 const DEFAULT_DESCRIPTIONS: Record<string, string> = {
   ar: "المنصة الأمثل لمشاهدة أحدث الأفلام، الأنمي، والمسلسلات، والبقاء على اطلاع بآخر الأخبار العالمية والدولية لحظة بلحظة.",
