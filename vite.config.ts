@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => ({
       "/sitemap.xml": {
         target: "https://zjlsmwcrenzdvdkfyhdx.supabase.co",
         changeOrigin: true,
-        rewrite: () => "/functions/v1/generate-sitemap",
+        rewrite: () => "/functions/v1/sitemap",
       },
     },
   },
