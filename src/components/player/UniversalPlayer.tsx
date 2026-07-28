@@ -62,13 +62,24 @@ export function detectSourceType(url: string, hint?: string): PlayerSourceType {
   return "iframe";
 }
 
+/** Force HTTPS on any URL to prevent mixed-content warnings and ensure secure embeds. */
+function forceHttps(u: string): string {
+  if (!u) return u;
+  // Replace any leading http:// (including already-https as no-op)
+  const secure = u.replace(/^http:\/\//i, "https://");
+  // Only re-add https:// if the URL starts with // (protocol-relative)
+  if (secure.startsWith("//")) return "https:" + secure;
+  return secure;
+}
+
 function EmbedIframe({ url, onError }: { url: string; onError: () => void }) {
+  const secureUrl = forceHttps(url);
   // Iframes can't reliably fire onError for X-Frame-Options blocks — a timeout heuristic
   // plus a manual "report" button in the overlay is the honest solution.
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     setLoaded(false);
-  }, [url]);
+  }, [secureUrl]);
   return (
     <>
       {!loaded && (
@@ -77,8 +88,8 @@ function EmbedIframe({ url, onError }: { url: string; onError: () => void }) {
         </div>
       )}
       <iframe
-        key={url}
-        src={url}
+        key={secureUrl}
+        src={secureUrl}
         title="Video Player"
         allow={IFRAME_ALLOW}
         allowFullScreen

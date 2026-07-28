@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     hmr: { overlay: false },
+    proxy: {
+      "/sitemap.xml": {
+        target: "https://zjlsmwcrenzdvdkfyhdx.supabase.co",
+        changeOrigin: true,
+        rewrite: () => "/functions/v1/generate-sitemap",
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

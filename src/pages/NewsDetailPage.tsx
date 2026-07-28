@@ -157,7 +157,10 @@ const NewsDetailPage = () => {
         {item.video_url && (
           <div className="mb-8 aspect-video overflow-hidden rounded-xl">
             <iframe
-              src={item.video_url.includes("youtube.com/watch") ? item.video_url.replace("watch?v=", "embed/") : item.video_url}
+              src={(item.video_url.includes("youtube.com/watch")
+                ? item.video_url.replace("watch?v=", "embed/")
+                : item.video_url
+              ).replace(/^http:\/\//i, "https://")}
               className="h-full w-full"
               title={title}
               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture; accelerometer; gyroscope; web-share; display-capture; xr-spatial-tracking"

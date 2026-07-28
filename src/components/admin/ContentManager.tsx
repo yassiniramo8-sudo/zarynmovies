@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { zarynConfirm } from "@/components/ZarynToast";
 import { Plus, Pencil, Trash2, Loader2, Bell, Languages, Wand2, X, Crown } from "lucide-react";
 import { ImageUpload, MultiImageUpload } from "./ImageUpload";
+import { pingGoogleSitemap } from "@/lib/pingSitemap";
 
 type ContentType = "movies" | "anime" | "articles" | "backgrounds";
 
@@ -213,6 +214,9 @@ export function ContentManager({ type, title }: ContentManagerProps) {
     }
 
     setSaving(false); setDialogOpen(false); fetchItems();
+
+    // Notify Google about the sitemap update (fire-and-forget, never blocks UI).
+    if (!editing) pingGoogleSitemap();
   };
 
   const handleDelete = async (id: string) => {

@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { zarynConfirm } from "@/components/ZarynToast";
 import { Plus, Pencil, Trash2, Loader2, Bell, Tv, ChevronUp, ChevronDown, Eye, EyeOff, Wand2, X } from "lucide-react";
 import { ImageUpload, MultiImageUpload } from "@/components/admin/ImageUpload";
+import { pingGoogleSitemap } from "@/lib/pingSitemap";
 
 interface SeriesItem {
   id: string; title: string; description?: string | null; poster_url?: string | null;
@@ -193,6 +194,9 @@ export default function AdminSeries() {
     }
 
     setSaving(false); setDialogOpen(false); fetchItems();
+
+    // Notify Google about the sitemap update (fire-and-forget, never blocks UI).
+    if (!editing) pingGoogleSitemap();
   };
 
   const handleDelete = async (id: string) => {
