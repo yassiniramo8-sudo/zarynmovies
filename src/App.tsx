@@ -15,6 +15,7 @@ import { Footer } from "@/components/Footer";
 import { AdBlockModal } from "@/components/AdBlockModal";
 import { VipAdBlocker } from "@/components/VipAdBlocker";
 import { TimedAdRenderer } from "@/components/TimedAdRenderer";
+import { GlobalAdScripts } from "@/components/GlobalAdScripts";
 import { useAdBlockDetector } from "@/hooks/useAdBlockDetector";
 import { useRoles } from "@/hooks/useRoles";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
@@ -158,6 +159,7 @@ const AppContent = () => {
     <>
       <ErrorBoundary name="VipAdBlocker" silent><VipAdBlocker /></ErrorBoundary>
       <ErrorBoundary name="TimedAds" silent><TimedAdRenderer /></ErrorBoundary>
+      <ErrorBoundary name="GlobalAdScripts" silent><GlobalAdScripts /></ErrorBoundary>
       {showAdBlockWall && <AdBlockModal />}
       <div className={showAdBlockWall ? "pointer-events-none select-none blur-sm" : ""}>
         <ErrorBoundary name="Navbar"><Navbar /></ErrorBoundary>

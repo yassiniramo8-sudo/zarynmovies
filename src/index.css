@@ -208,6 +208,45 @@ html[dir="rtl"] .space-x-4 > :not(:first-child) {
   }
 }
 
+/* ============ Ad Placement Layout Stability ============ */
+/* Prevent layout shift (CLS) from ad loading */
+.ad-placement-wrapper {
+  contain: layout style paint;
+  content-visibility: auto;
+}
+
+.ad-placement-wrapper iframe,
+.ad-placement-wrapper ins,
+.ad-placement-wrapper img {
+  max-width: 100% !important;
+  vertical-align: middle;
+}
+
+/* Skeleton animation for ad placeholders */
+.ad-skeleton {
+  contain: strict;
+}
+
+/* Ensure ad containers don't overflow on mobile */
+@media (max-width: 640px) {
+  .ad-placement-wrapper {
+    max-width: 100vw !important;
+    overflow-x: hidden;
+  }
+  .ad-placement-wrapper iframe {
+    max-width: 100% !important;
+  }
+}
+
+/* Ad unit base styles */
+.ad-unit {
+  contain: layout style;
+}
+
+.ad-container {
+  contain: layout style;
+}
+
 /* Custom scrollbar (subtle, both themes) */
 ::-webkit-scrollbar {
   width: 10px;

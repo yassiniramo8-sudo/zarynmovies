@@ -13,6 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AdPlacement } from "@/components/AdPlacement";
 import {
   getPreview,
   subscribePreview,
@@ -29,7 +30,6 @@ function useAdPreviewState() {
   );
 }
 
-
 // -------------------- AdSense global init (once) --------------------
 let adsenseInitialized = false;
 function ensureAdsense() {
@@ -39,12 +39,14 @@ function ensureAdsense() {
   // We do NOT inject the loader script automatically — admins paste the
   // full <script> tag inside the ad HTML. This helper simply guarantees
   // adsbygoogle.push() is called at most once per unit after mount.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).adsbygoogle = (window as any).adsbygoogle || [];
 }
 
 // Stable per-session seed so ads don't reshuffle on every render.
 function sessionSeed(): number {
   if (typeof window === "undefined") return 1;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
   if (!w.__adSessionSeed) w.__adSessionSeed = Math.floor(Math.random() * 1e9);
   return w.__adSessionSeed as number;
@@ -107,6 +109,7 @@ function AdUnit({
     if (ad.ad_type !== "adsense" || adsensePushed.current) return;
     ensureAdsense();
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
       adsensePushed.current = true;
     } catch {
@@ -164,7 +167,11 @@ function AdUnit({
           </a>
         )}
         {ad.content_html && (
-          <div dangerouslySetInnerHTML={{ __html: ad.content_html }} />
+          <AdPlacement
+            html={ad.content_html}
+            size="responsive"
+            minHeight={100}
+          />
         )}
       </div>
     </div>
@@ -178,6 +185,39 @@ function DebugSlot({ placement, reason }: { placement: string; reason: string })
       [ad:{placement}] hidden — {reason}
     </div>
   );
+}
+
+// -------------------- Preview Mode Renderer --------------------
+function PreviewRenderer({
+  preview,
+  placement,
+  className,
+}: {
+  preview: ReturnType<typeof getPreview>;
+  placement: string;
+  className?: string;
+}) {
+  if (preview?.userType === "vip") {
+    return (
+      <div className={cn("ad-container my-2", className)}>
+        <div className="rounded border border-dashed border-emerald-500/50 bg-emerald-500/5 text-emerald-600 text-[11px] font-mono px-2 py-1">
+          [ad:{placement}] hidden — VIP visitor (no ads)
+        </div>
+      </div>
+    );
+  }
+  if (preview && preview.ad.placement === placement) {
+    const ad = materializePreviewAd(preview);
+    return (
+      <div className={cn("ad-container my-4 relative", className)}>
+        <div className="absolute -top-2 left-2 z-10 rounded bg-primary text-primary-foreground text-[10px] font-mono px-1.5 py-0.5 shadow">
+          PREVIEW · {placement}
+        </div>
+        <AdUnit ad={ad} debug={false} />
+      </div>
+    );
+  }
+  return null;
 }
 
 // -------------------- Main Renderer --------------------
@@ -216,42 +256,12 @@ function AdvertisementRendererInner({
   // ---- LIVE PREVIEW SHORT-CIRCUIT ----
   const preview = useAdPreviewState();
   const inPreview = isPreviewMode();
-  if (inPreview) {
-    // "Preview as VIP" hides every ad slot everywhere.
-    if (preview?.userType === "vip") {
-      return (
-        <div className={cn("ad-container my-2", className)}>
-          <div className="rounded border border-dashed border-emerald-500/50 bg-emerald-500/5 text-emerald-600 text-[11px] font-mono px-2 py-1">
-            [ad:{placement}] hidden — VIP visitor (no ads)
-          </div>
-        </div>
-      );
-    }
-    if (preview && preview.ad.placement === placement) {
-      const ad = materializePreviewAd(preview);
-      return (
-        <div className={cn("ad-container my-4 relative", className)}>
-          <div className="absolute -top-2 left-2 z-10 rounded bg-primary text-primary-foreground text-[10px] font-mono px-1.5 py-0.5 shadow">
-            PREVIEW · {placement}
-          </div>
-          <AdUnit ad={ad} debug={false} />
-        </div>
-      );
-    }
-    // In preview mode but not the target placement — render nothing so the
-    // page layout stays clean and only the preview slot stands out.
-    return null;
-  }
-
 
   const debug = !!settings?.debug_mode;
   const globalIntensity = settings?.ad_intensity ?? 50;
   const placementOverride = placementSettings[placement];
-  // Per-placement override takes precedence over the global slider.
-  // A placement can also be fully disabled independent of ad state.
   const placementEnabled = placementOverride ? placementOverride.enabled : true;
   const intensity = placementOverride ? placementOverride.intensity : globalIntensity;
-
 
   // Language + dismissed filter
   const langFiltered = useMemo(
@@ -304,6 +314,11 @@ function AdvertisementRendererInner({
   const handleDismiss = useCallback((adId: string) => {
     setDismissed((prev) => new Set(prev).add(adId));
   }, []);
+
+  // ---- Preview mode early return (after all hooks) ----
+  if (inPreview) {
+    return <PreviewRenderer preview={preview} placement={placement} className={className} />;
+  }
 
   if (loading || vipLoading || adSettingsLoading || globalLoading || placementLoading) return null;
 

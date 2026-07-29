@@ -21,6 +21,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { AdPlacement } from "@/components/AdPlacement";
 import { isPreviewMode, subscribePreview, getPreview, materializePreviewAd } from "@/lib/adPreview";
 import { useSyncExternalStore } from "react";
 
@@ -288,7 +289,11 @@ function AdBody({ ad, onClick }: { ad: Advertisement; onClick: () => void }) {
         </a>
       )}
       {ad.content_html && (
-        <div dangerouslySetInnerHTML={{ __html: ad.content_html }} />
+        <AdPlacement
+          html={ad.content_html}
+          size="responsive"
+          minHeight={100}
+        />
       )}
     </div>
   );
