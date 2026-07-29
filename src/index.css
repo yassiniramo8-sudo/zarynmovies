@@ -227,6 +227,43 @@ html[dir="rtl"] .space-x-4 > :not(:first-child) {
   contain: strict;
 }
 
+/* ============ Responsive Ad Scaling ============ */
+/*
+ * Fixed-size ad iframes (e.g. 300x250, 728x90) are rendered at their native
+ * dimensions on desktop. On smaller viewports they scale down proportionally
+ * without overflowing or causing horizontal scroll.
+ *
+ * The wrapper uses a max-width equal to the ad's native width, so on larger
+ * screens the ad renders at full size. On smaller screens the iframe scales
+ * down via max-width: 100% + the intrinsic aspect-ratio trick.
+ */
+.ad-responsive-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  margin: 15px auto;
+}
+
+/* Scale fixed-size iframes down on small viewports */
+.ad-responsive-container iframe {
+  max-width: 100% !important;
+}
+
+/* 
+ * When an iframe has explicit width/height attributes (e.g. 300x250),
+ * this ensures it scales proportionally on mobile while keeping its
+ * native size on desktop where the container's max-width is larger.
+ */
+.ad-placement-wrapper iframe[width][height] {
+  max-width: 100% !important;
+  height: auto !important;
+  /* Preserve aspect ratio when width is constrained */
+  aspect-ratio: attr(width) / attr(height);
+}
+
 /* Ensure ad containers don't overflow on mobile */
 @media (max-width: 640px) {
   .ad-placement-wrapper {
@@ -235,6 +272,19 @@ html[dir="rtl"] .space-x-4 > :not(:first-child) {
   }
   .ad-placement-wrapper iframe {
     max-width: 100% !important;
+  }
+  /* Scale fixed-size ad iframes proportionally on mobile */
+  .ad-placement-wrapper iframe[width][height] {
+    width: 100% !important;
+    height: auto !important;
+  }
+}
+
+/* On larger screens, let fixed-size iframes render at native dimensions */
+@media (min-width: 641px) {
+  .ad-placement-wrapper iframe[width][height] {
+    width: auto !important;
+    height: auto !important;
   }
 }
 

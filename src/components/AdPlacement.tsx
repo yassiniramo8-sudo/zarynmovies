@@ -131,6 +131,61 @@ function extractScripts(html: string): {
 }
 
 /**
+ * Scoped `atOptions` — rewrites inline script content so that each ad unit
+ * uses its own unique variable name instead of the global `atOptions`.
+ * This prevents multiple ad units on the same page from overwriting each
+ * other's configuration.
+ *
+ * Transforms:
+ *   atOptions = { ... }  →  window._adAtOptions_<uid> = { ... }
+ *   atOptions['key']     →  window._adAtOptions_<uid>['key']
+ *
+ * The invoke.js script is also rewritten to reference the scoped variable
+ * via a data-attribute on its own <script> tag.
+ */
+function scopeAtOptions(scripts: Array<{ src?: string; content?: string; attrs: Record<string, string> }>, uid: string): Array<{ src?: string; content?: string; attrs: Record<string, string> }> {
+  const scopedVar = `_adAtOptions_${uid}`;
+
+  return scripts.map((s) => {
+    // If this is the invoke.js script, add a data attribute pointing to the scoped variable
+    if (s.src && s.src.includes('invoke.js')) {
+      return {
+        ...s,
+        attrs: {
+          ...s.attrs,
+          'data-ad-options-var': scopedVar,
+        },
+      };
+    }
+
+    // If this is an inline script, rewrite atOptions references
+    if (s.content) {
+      let content = s.content;
+
+      // Rewrite: atOptions = { ... }  →  window._adAtOptions_<uid> = { ... }
+      content = content.replace(
+        /(?:var\s+)?atOptions\s*=\s*(\{[\s\S]*?\});/g,
+        `window.${scopedVar} = $1;`
+      );
+
+      // Rewrite: atOptions['key'] or atOptions.key  →  window._adAtOptions_<uid>['key']
+      content = content.replace(
+        /atOptions\s*\[/g,
+        `window.${scopedVar}[`
+      );
+      content = content.replace(
+        /atOptions\./g,
+        `window.${scopedVar}.`
+      );
+
+      return { ...s, content };
+    }
+
+    return s;
+  });
+}
+
+/**
  * Create a real, executable `<script>` element and append it to `container`.
  * Returns true if the script was appended without throwing.
  */
@@ -170,7 +225,7 @@ function appendScript(
  * Inject HTML + scripts into a container safely.
  * Returns `{ ok, fallback }` — `fallback` is true if every script failed.
  */
-function injectAdHTML(container: HTMLElement, html: string): {
+function injectAdHTML(container: HTMLElement, html: string, uid?: string): {
   ok: boolean;
   fallback: boolean;
 } {
@@ -179,9 +234,12 @@ function injectAdHTML(container: HTMLElement, html: string): {
   // 1) Set non-script HTML first.
   container.innerHTML = htmlWithoutScripts;
 
-  // 2) Re-create each script as a real element so it executes.
+  // 2) Scope atOptions to prevent conflicts between multiple ad units.
+  const scopedScripts = uid ? scopeAtOptions(scripts, uid) : scripts;
+
+  // 3) Re-create each script as a real element so it executes.
   let successCount = 0;
-  for (const s of scripts) {
+  for (const s of scopedScripts) {
     if (appendScript(container, s)) successCount++;
   }
 
@@ -273,6 +331,8 @@ function AdInjector({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
+  // Unique ID per injection instance to scope atOptions and prevent conflicts
+  const uidRef = useRef(`ad_${Math.random().toString(36).substring(2, 10)}`);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -288,7 +348,7 @@ function AdInjector({
     // Defer one tick so React finishes its commit before we mutate the DOM.
     const id = window.requestAnimationFrame(() => {
       try {
-        const result = injectAdHTML(container, html);
+        const result = injectAdHTML(container, html, uidRef.current);
         if (result.fallback || (sandbox && result.ok === false)) {
           setStatus("fallback");
         } else {
