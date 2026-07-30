@@ -53,6 +53,7 @@ const AboutUsPage = lazy(() => import("./pages/AboutUsPage"));
 const ContactUsPage = lazy(() => import("./pages/ContactUsPage"));
 const DmcaPage = lazy(() => import("./pages/DmcaPage"));
 const EntertainmentAIPage = lazy(() => import("./pages/EntertainmentAIPage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
 
 // Admin pages
 const AdminLayout = lazy(() => import("@/components/admin/AdminLayout").then(m => ({ default: m.AdminLayout })));
@@ -210,6 +211,7 @@ const AppContent = () => {
             <Route path="/news/summaries" element={<Navigate to="/summaries" replace />} />
             <Route path="/news/summaries/:slug" element={<Navigate to="/summaries/sport" replace />} />
 
+            <Route path="/search" element={<SearchPage />} />
             <Route path="/entertainment" element={<EntertainmentAIPage />} />
             <Route path="/articles" element={<ArticlesPage />} />
             <Route path="/articles/:id" element={<ArticleDetailPage />} />

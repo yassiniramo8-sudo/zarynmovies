@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Loader2 } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
 import { AdvertisementRenderer } from "@/components/AdvertisementRenderer";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { useHomeLayout, HomeSection } from "@/hooks/useHomeLayout";
 import { HeroCinema } from "@/components/home/HeroCinema";
 import { AutoSection } from "@/components/home/AutoSection";
@@ -72,6 +73,11 @@ export default function HomePage() {
       {heroSection && <SectionRenderer section={heroSection} />}
 
       <div className="container mx-auto space-y-12 px-3 py-10 sm:px-4 md:space-y-16 md:py-14">
+        {/* Global Search Bar */}
+        <div className="mx-auto max-w-2xl">
+          <GlobalSearch />
+        </div>
+
         <AdvertisementRenderer placement="home_top" />
         {others.map((s) => (
           <SectionRenderer key={s.id} section={s} />
