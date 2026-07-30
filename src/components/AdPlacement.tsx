@@ -351,7 +351,6 @@ export function AdPlacement({
   onInject,
 }: AdPlacementProps) {
   const skeletonHeight = minHeight ?? SIZE_HEIGHTS[size] ?? 120;
-  const maxWidth = SIZE_MAX_WIDTH[size] ?? "100%";
   const [hasContent, setHasContent] = useState(false);
 
   // Detect whether there's anything to render.
@@ -363,24 +362,34 @@ export function AdPlacement({
     onInject?.();
   }, [onInject]);
 
+  // Outer wrapper: full-width flex container that centers its child.
+  // The inner wrapper uses width: fit-content so it auto-expands to
+  // the ad's native dimensions (e.g. 728px for a 728x90 banner) without
+  // being capped at a preset max-width that would clip larger units.
+  // On mobile, max-width: 100% ensures fixed-size ads scale down.
   const wrapperStyle: CSSProperties = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden",
-    maxWidth,
     width: "100%",
-    marginLeft: "auto",
-    marginRight: "auto",
-    minHeight: hasContent ? skeletonHeight : undefined,
+    margin: "20px auto",
     ...style,
+  };
+
+  const innerStyle: CSSProperties = {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "fit-content",
+    maxWidth: "100%",
+    minHeight: hasContent ? skeletonHeight : undefined,
   };
 
   return (
     <ErrorBoundary name="AdPlacement" silent>
-      <div className={cn("ad-placement-wrapper relative my-2", className)} style={wrapperStyle}>
+      <div className={cn("ad-placement-wrapper", className)} style={wrapperStyle}>
         {showLabel && hasContent && (
-          <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-muted-foreground/60 select-none">
+          <span className="block text-center text-[10px] uppercase tracking-wider text-muted-foreground/60 select-none mb-1">
             Advertisement
           </span>
         )}
@@ -388,9 +397,9 @@ export function AdPlacement({
         {/* Skeleton reserves space until content arrives. */}
         {!hasContent && <AdSkeleton height={skeletonHeight} />}
 
-        {/* Actual ad content. */}
+        {/* Actual ad content — inner container auto-sizes to ad dimensions. */}
         {hasContent && (
-          <div className="ad-placement-content w-full" key={nonce}>
+          <div className="ad-placement-content" style={innerStyle} key={nonce}>
             {html && html.trim() ? (
               <AdInjector
                 html={html}
