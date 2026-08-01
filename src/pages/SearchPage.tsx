@@ -10,6 +10,7 @@ import { Paginator } from "@/components/Paginator";
 import { useGlobalSearch, type SearchResult } from "@/hooks/useGlobalSearch";
 import { usePagination } from "@/hooks/usePagination";
 import { usePaginationConfig } from "@/hooks/usePaginationConfig";
+import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -49,6 +50,30 @@ export default function SearchPage() {
   const safePage = Math.min(page, totalPages);
   const startIdx = (safePage - 1) * pageSize;
   const pagedItems = filtered.slice(startIdx, startIdx + pageSize);
+
+  // Batch translations for visible items (per type)
+  const visibleIds = useMemo(() => pagedItems.map((r) => r.id), [pagedItems]);
+  const movieTranslations = useBatchContentTranslations(
+    visibleIds.filter((_, i) => pagedItems[i]?.type === "movie"),
+    "movie"
+  );
+  const animeTranslations = useBatchContentTranslations(
+    visibleIds.filter((_, i) => pagedItems[i]?.type === "anime"),
+    "anime"
+  );
+  const seriesTranslations = useBatchContentTranslations(
+    visibleIds.filter((_, i) => pagedItems[i]?.type === "series"),
+    "series"
+  );
+
+  const getLocalizedItem = useCallback((item: SearchResult): SearchResult => {
+    const tr = item.type === "movie" ? movieTranslations : item.type === "anime" ? animeTranslations : seriesTranslations;
+    return {
+      ...item,
+      title: tr.getTitle(item.id, item.title),
+      genre: tr.getGenre(item.id, item.genre || []),
+    };
+  }, [movieTranslations, animeTranslations, seriesTranslations]);
 
   const handleSearchChange = useCallback(
     (v: string) => {
@@ -133,22 +158,25 @@ export default function SearchPage() {
       {/* Results grid */}
       {pagedItems.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {pagedItems.map((item, i) => (
-            <ContentCard
-              key={`${item.type}-${item.id}`}
-              index={i}
-              item={{
-                id: item.id,
-                title: item.title,
-                poster: item.poster_url || "/placeholder.svg",
-                rating: item.rating || 0,
-                year: item.year || 0,
-                genre: item.genre || [],
-                description: "",
-                type: item.type,
-              }}
-            />
-          ))}
+          {pagedItems.map((item, i) => {
+            const localized = getLocalizedItem(item);
+            return (
+              <ContentCard
+                key={`${item.type}-${item.id}`}
+                index={i}
+                item={{
+                  id: localized.id,
+                  title: localized.title,
+                  poster: localized.poster_url || "/placeholder.svg",
+                  rating: localized.rating || 0,
+                  year: localized.year || 0,
+                  genre: localized.genre || [],
+                  description: "",
+                  type: localized.type,
+                }}
+              />
+            );
+          })}
         </div>
       )}
 

@@ -42,6 +42,7 @@ interface TranslationResult {
   title: string;
   description: string;
   content?: string;
+  genre?: string[];
 }
 
 export default function AdminAITranslate() {
@@ -133,11 +134,11 @@ export default function AdminAITranslate() {
     } else {
       const { data } = await supabase
         .from("content_translations")
-        .select("language, title, description, content")
+        .select("language, title, description, content, genre")
         .eq("content_id", contentId)
         .eq("content_type", contentType);
       (data || []).forEach((t: any) => {
-        existing[t.language] = { title: t.title, description: t.description || "", content: t.content || "" };
+        existing[t.language] = { title: t.title, description: t.description || "", content: t.content || "", genre: t.genre || [] };
       });
     }
     setExistingTranslations(existing);
@@ -154,12 +155,24 @@ export default function AdminAITranslate() {
       : `${selectedItem.title}\n---\n${selectedItem.excerpt || ""}\n---\n${selectedItem.content || ""}`;
 
     try {
+      let genre: string[] = [];
+      if (isMedia) {
+        const cfg = CONTENT_TYPES.find((c) => c.value === contentType)!;
+        const { data: itemData } = await supabase
+          .from(cfg.table as any)
+          .select("genre")
+          .eq("id", selectedItem.id)
+          .single();
+        genre = (itemData as any)?.genre || [];
+      }
+
       const { data, error } = await supabase.functions.invoke("translate-content", {
         body: {
           contentId: selectedItem.id,
           contentType,
           title: selectedItem.title,
           description: isMedia ? selectedItem.description || "" : selectedItem.content || selectedItem.excerpt || "",
+          genre,
           targetLanguage: targetLang,
           forceTranslate: true,
         },
@@ -191,13 +204,13 @@ export default function AdminAITranslate() {
       } else {
         const { data: t } = await supabase
           .from("content_translations")
-          .select("title, description, content")
+          .select("title, description, content, genre")
           .eq("content_id", selectedItem.id)
           .eq("content_type", contentType)
           .eq("language", targetLang)
           .single();
         if (t) {
-          const r = { title: t.title, description: t.description || "", content: t.content || "" };
+          const r = { title: t.title, description: t.description || "", content: t.content || "", genre: t.genre || [] };
           setResult(r);
           setEditedResult(r);
         }
@@ -234,6 +247,7 @@ export default function AdminAITranslate() {
             title: editedResult.title,
             description: editedResult.description,
             content: editedResult.content || "",
+            genre: editedResult.genre || [],
           },
           { onConflict: "content_id,content_type,language" }
         );

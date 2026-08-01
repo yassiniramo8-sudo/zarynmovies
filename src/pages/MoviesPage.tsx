@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,7 @@ import { usePagination } from "@/hooks/usePagination";
 import { usePaginationConfig } from "@/hooks/usePaginationConfig";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
+import { useCachedListData } from "@/hooks/useCachedListData";
 
 interface MovieItem {
   id: string;
@@ -27,8 +28,6 @@ interface MovieItem {
 }
 
 const MoviesPage = () => {
-  const [allItems, setAllItems] = useState<MovieItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("all");
   const [year, setYear] = useState("all");
@@ -39,18 +38,18 @@ const MoviesPage = () => {
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Load ALL metadata (IDs, genres, years, titles) initially for filtering.
-  // Only minimal data — we fetch full details per page from this cached list.
-  useEffect(() => {
-    supabase
-      .from("movies")
-      .select("id,title,poster_url,rating,year,genre,description,trending,pinned,trailer_url")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setAllItems((data as MovieItem[]) || []);
-        setLoading(false);
-      });
-  }, []);
+  // Cached list data — renders cached items immediately on BACK navigation
+  // (preserving DOM height for scroll restoration) while fresh data loads.
+  const { items: allItems, loading } = useCachedListData<MovieItem>(
+    "movies",
+    async () => {
+      const { data } = await supabase
+        .from("movies")
+        .select("id,title,poster_url,rating,year,genre,description,trending,pinned,trailer_url")
+        .order("created_at", { ascending: false });
+      return (data as MovieItem[]) || [];
+    }
+  );
 
   // Derive unique genres & years
   const allGenres = useMemo(() => [...new Set(allItems.flatMap((m) => m.genre || []))].sort(), [allItems]);
@@ -98,11 +97,14 @@ const MoviesPage = () => {
     [resetPage]
   );
 
-  // Translations for visible items
+  // Translations for visible items — title, description and genre are all localized
   const visibleIds = useMemo(() => pagedItems.map((m) => m.id), [pagedItems]);
-  const { getDescription, getTitle } = useBatchContentTranslations(visibleIds, "movie");
+  const { getDescription, getTitle, getGenre } = useBatchContentTranslations(visibleIds, "movie");
 
-  if (loading)
+  // Show a subtle inline loader only when there's NO cached data yet.
+  // If cached items exist, render the grid immediately (preserving DOM height
+  // for scroll restoration on BACK navigation).
+  if (loading && allItems.length === 0)
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -168,7 +170,7 @@ const MoviesPage = () => {
                 poster: item.poster_url || "/placeholder.svg",
                 rating: item.rating || 0,
                 year: item.year || 0,
-                genre: item.genre || [],
+                genre: getGenre(item.id, item.genre || []),
                 description: getDescription(item.id, item.description),
                 type: "movie",
                 trending: item.trending || false,

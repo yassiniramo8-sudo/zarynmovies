@@ -5,13 +5,14 @@ import { SectionRail } from "./SectionRail";
 import { HomeCardItem } from "./HomeCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSectionItems } from "@/hooks/useHomeLayout";
+import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
 import type { HomeSection } from "@/hooks/useHomeLayout";
 
 interface Props { section: HomeSection }
 
 async function fetchByType(type: "movie" | "anime" | "series", limit: number, order: "created_at" = "created_at"): Promise<HomeCardItem[]> {
   const tbl = type === "movie" ? "movies" : type === "anime" ? "anime" : "series";
-  let q: any = supabase.from(tbl as any).select("id,title,poster_url,rating,year,vip_only").order(order, { ascending: false }).limit(limit);
+  let q: any = supabase.from(tbl as any).select("id,title,poster_url,rating,year,vip_only,genre").order(order, { ascending: false }).limit(limit);
   if (type === "series") q = q.eq("visible", true);
   const { data } = await q;
   return ((data as any[]) || []).map((r) => ({ ...r, type }));
@@ -19,7 +20,7 @@ async function fetchByType(type: "movie" | "anime" | "series", limit: number, or
 
 async function fetchByGenre(genre: string, type: "movie" | "anime" | "series", limit: number): Promise<HomeCardItem[]> {
   const tbl = type === "movie" ? "movies" : type === "anime" ? "anime" : "series";
-  let q: any = supabase.from(tbl as any).select("id,title,poster_url,rating,year,vip_only").contains("genre", [genre]).order("created_at", { ascending: false }).limit(limit);
+  let q: any = supabase.from(tbl as any).select("id,title,poster_url,rating,year,vip_only,genre").contains("genre", [genre]).order("created_at", { ascending: false }).limit(limit);
   if (type === "series") q = q.eq("visible", true);
   const { data } = await q;
   return ((data as any[]) || []).map((r) => ({ ...r, type }));
@@ -121,12 +122,24 @@ export function AutoSection({ section }: Props) {
     return () => { cancelled = true; };
   }, [section.id, section.type, JSON.stringify(settings), user?.id, manualItems.length]);
 
+  const translatedItems = useBatchContentTranslations(
+    items.map(i => i.id),
+    "movie"
+  );
+
+  const localizedItems = items.map(item => ({
+    ...item,
+    title: item.type === "movie"
+      ? translatedItems.getTitle(item.id, item.title)
+      : item.title,
+  }));
+
   return (
     <SectionRail
       sectionKey={section.key}
       titleI18n={section.title_i18n}
       descI18n={section.description_i18n}
-      items={items}
+      items={localizedItems}
       loading={loading}
       showBetweenAds
     />

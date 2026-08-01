@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { TrailerModal } from "@/components/TrailerModal";
 import { useSectionItems } from "@/hooks/useHomeLayout";
+import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
 import { toast } from "sonner";
 
 interface Slide {
@@ -65,7 +66,24 @@ export function HeroCinema({ sectionId, settings }: Props) {
     return () => window.clearInterval(id);
   }, [settings?.autoplay, settings?.intervalMs, slides.length]);
 
-  const current = slides[idx];
+  const movieIds = slides.filter(s => s.type === "movie").map(s => s.id);
+  const animeIds = slides.filter(s => s.type === "anime").map(s => s.id);
+  const seriesIds = slides.filter(s => s.type === "series").map(s => s.id);
+  const movieTr = useBatchContentTranslations(movieIds, "movie");
+  const animeTr = useBatchContentTranslations(animeIds, "anime");
+  const seriesTr = useBatchContentTranslations(seriesIds, "series");
+
+  const localizedSlides = slides.map(s => {
+    const tr = s.type === "movie" ? movieTr : s.type === "anime" ? animeTr : seriesTr;
+    return {
+      ...s,
+      title: tr.getTitle(s.id, s.title),
+      genre: tr.getGenre(s.id, s.genre || []),
+      description: tr.getDescription(s.id, s.description),
+    };
+  });
+
+  const current = localizedSlides[idx];
   const heightVh = settings?.heightVh ?? 92;
   const overlayOpacity = settings?.overlayOpacity ?? 0.55;
   const blur = settings?.blur ?? 0;

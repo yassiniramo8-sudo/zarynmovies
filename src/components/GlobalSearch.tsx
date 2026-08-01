@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useGlobalSearch, type SearchResult } from "@/hooks/useGlobalSearch";
+import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
 
 /* ------------------------------------------------------------------ */
 /*  Type badge helper                                                  */
@@ -133,10 +134,23 @@ export function GlobalSearch({
 
   const { results, loading, totalCount, query: debouncedQuery } = useGlobalSearch(query);
 
-  // Filter results by category chip
+  // Localize titles/genres for dropdown display
+  const movieIds = results.filter(r => r.type === "movie").map(r => r.id);
+  const animeIds = results.filter(r => r.type === "anime").map(r => r.id);
+  const seriesIds = results.filter(r => r.type === "series").map(r => r.id);
+  const movieTr = useBatchContentTranslations(movieIds, "movie");
+  const animeTr = useBatchContentTranslations(animeIds, "anime");
+  const seriesTr = useBatchContentTranslations(seriesIds, "series");
+
+  const localeResults = results.map(r => {
+    const tr = r.type === "movie" ? movieTr : r.type === "anime" ? animeTr : seriesTr;
+    return { ...r, title: tr.getTitle(r.id, r.title), genre: tr.getGenre(r.id, r.genre || []) };
+  });
+
+  // Filter results by category chip (using localized results for display)
   const filteredResults = categoryFilter
-    ? results.filter((r) => r.type === categoryFilter)
-    : results;
+    ? localeResults.filter((r) => r.type === categoryFilter)
+    : localeResults;
 
   const hasResults = filteredResults.length > 0;
   const showDropdown = isOpen && query.length > 0;

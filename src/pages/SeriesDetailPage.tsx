@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { Star, Play, Heart, Plus, MessageCircle, Trash2, Send, Tv, ChevronLeft, ChevronRight, Check, Eye, EyeOff, Clock, Languages, Loader2 } from "lucide-react";
+import { Star, Play, Heart, Plus, MessageCircle, Trash2, Send, Tv, ChevronLeft, ChevronRight, Check, Eye, EyeOff, Clock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,14 +75,13 @@ const SeriesDetailPage = () => {
   const [activeEpisodeId, setActiveEpisodeId] = useState<string | null>(null);
   const [watchedEpisodes, setWatchedEpisodes] = useState<Set<string>>(new Set());
   const [commentText, setCommentText] = useState("");
-  const [translating, setTranslating] = useState(false);
   const { user } = useAuth();
   const { t } = useLanguage();
   const { isVip } = useVipStatus();
 
   const contentType = "series";
   useTrackView(id, contentType);
-  const { getTranslatedField, targetLang } = useContentTranslations(id, contentType);
+  const { getTranslatedField, getGenre, targetLang } = useContentTranslations(id, contentType);
 
   // Arm the guard SYNCHRONOUSLY during render — before any child component
   // (including iframes) is committed to the DOM. This eliminates the race
@@ -92,25 +91,6 @@ const SeriesDetailPage = () => {
   useLayoutEffect(() => {
     return () => setDetailPageActive(false);
   }, []);
-
-  const handleTranslate = useCallback(async () => {
-    if (!series) return;
-    setTranslating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("translate-content", {
-        body: { contentId: series.id, contentType, title: series.title, description: series.description || "" },
-      });
-      if (error) throw error;
-      toast.success(`${t("toast.translated") || "Translated"} (${data?.translated || 0})`);
-      window.location.reload();
-    } catch (e: any) {
-      toast.error(e.message || "Translation failed");
-    } finally {
-      setTranslating(false);
-    }
-  }, [series, contentType]);
-
-  useTrackView(id, "series");
 
   useEffect(() => {
     if (!id) return;
@@ -191,7 +171,9 @@ const SeriesDetailPage = () => {
 
   const posterUrl = series.poster_url || "/placeholder.svg";
   const gallery = (series.gallery_images || []) as string[];
+  const displayTitle = getTranslatedField(series, "title");
   const displayDescription = getTranslatedField(series, "description");
+  const displayGenres = getGenre(series.genre);
   const isRtl = targetLang === "ar";
 
   return (
@@ -209,12 +191,12 @@ const SeriesDetailPage = () => {
           </div>
 
           <div className="flex-1">
-            <h1 className="mb-3 font-display text-4xl font-bold text-foreground md:text-5xl">{series.title}</h1>
+            <h1 className="mb-3 font-display text-4xl font-bold text-foreground md:text-5xl">{displayTitle}</h1>
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <StarRating value={averageRating} readonly size="md" showValue count={totalRatings} />
               {series.year && <span className="text-muted-foreground">{series.year}</span>}
               <Badge variant="outline" className="border-primary/50 text-primary">{episodes.length} {t("series.episodes")}</Badge>
-              {series.genre?.map((g) => <Badge key={g} variant="outline" className="border-border/50">{g}</Badge>)}
+              {displayGenres.map((g) => <Badge key={g} variant="outline" className="border-border/50">{g}</Badge>)}
             </div>
 
             <div className="mb-4 flex items-center gap-2">
@@ -236,11 +218,7 @@ const SeriesDetailPage = () => {
               <Button size="lg" variant="ghost" className="gap-2" onClick={addWatchLater}>
                 <Plus className="h-5 w-5" /> {t("detail.watchLater")}
               </Button>
-              <Button size="sm" variant="outline" className="gap-1" onClick={handleTranslate} disabled={translating}>
-                {translating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
-                {t("detail.translate") || "Translate"}
-              </Button>
-              <SocialShareButtons title={series.title} description={displayDescription || undefined} />
+              <SocialShareButtons title={displayTitle} description={displayDescription || undefined} />
             </div>
           </div>
         </motion.div>

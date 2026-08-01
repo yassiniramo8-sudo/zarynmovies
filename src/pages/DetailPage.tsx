@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { Star, Play, Heart, Plus, MessageCircle, Languages, Loader2 } from "lucide-react";
+import { Star, Play, Heart, Plus, MessageCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,7 +70,6 @@ const DetailPage = () => {
   const [item, setItem] = useState<DetailItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [trailerOpen, setTrailerOpen] = useState(false);
-  const [translating, setTranslating] = useState(false);
   const { user } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const { isVip } = useVipStatus();
@@ -88,7 +87,7 @@ const DetailPage = () => {
   const tableName = routeType as "movies" | "anime" | "articles";
   const contentType = routeType === "movies" ? "movie" : routeType === "articles" ? "article" : "anime";
 
-  const { getTranslatedField, targetLang } = useContentTranslations(id, contentType);
+  const { getTranslatedField, getGenre, targetLang } = useContentTranslations(id, contentType);
 
   // Arm the guard SYNCHRONOUSLY during render — before any child component
   // (including iframes) is committed to the DOM. This eliminates the race
@@ -115,28 +114,6 @@ const DetailPage = () => {
   const { liked, count: likeCount, toggle: toggleLike } = useLikes(id || "", contentType);
   const { isBanned, remainingText, reason: banReason } = useUserBan();
 
-  const handleTranslate = useCallback(async () => {
-    if (!item) return;
-    setTranslating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("translate-content", {
-        body: {
-          contentId: item.id,
-          contentType,
-          title: item.title,
-          description: item.description || item.excerpt || "",
-        },
-      });
-      if (error) throw error;
-      toast.success(`${t("toast.translated") || "Translated"} (${data?.translated || 0})`);
-      window.location.reload();
-    } catch (e: any) {
-      toast.error(e.message || "Translation failed");
-    } finally {
-      setTranslating(false);
-    }
-  }, [item, contentType]);
-
   const addWatchLater = async () => {
     if (!user || !id) { toast.error(t("toast.signInToSave")); return; }
     if (isBanned) { toast.error(`${t("detail.banned")} ${remainingText || ""}`); return; }
@@ -155,10 +132,11 @@ const DetailPage = () => {
   const isVipOnly = !!(item as any).vip_only;
   const blockedByVip = isVipOnly && !isVip;
 
-  // Use translation layer — movie titles never translated
+  // Use translation layer — title and genre are fully translatable per-locale
   const displayTitle = getTranslatedField(item, "title");
   const displayDescription = getTranslatedField(item, "description");
   const displayContent = item.content ? getTranslatedField(item, "content") : "";
+  const displayGenres = getGenre(item.genre);
 
   const posterUrl = item.poster_url || item.cover_url || "/placeholder.svg";
   const gallery = (item.gallery_images || []) as string[];
@@ -179,10 +157,10 @@ const DetailPage = () => {
     : {
         "@context": "https://schema.org",
         "@type": "Movie",
-        name: item.title, // Always original title for SEO
+        name: displayTitle,
         description: displayDescription || "",
         image: posterUrl,
-        genre: item.genre,
+        genre: displayGenres,
         datePublished: item.year ? `${item.year}-01-01` : undefined,
         aggregateRating: averageRating > 0 ? {
           "@type": "AggregateRating",
@@ -201,7 +179,7 @@ const DetailPage = () => {
         description={displayDescription || `Watch ${item.title} on Zaryn Movies`}
         image={posterUrl}
         type={ogType}
-        tags={item.genre || undefined}
+        tags={displayGenres.length > 0 ? displayGenres : (item.genre || undefined)}
         jsonLd={jsonLd}
       />
 
@@ -225,7 +203,7 @@ const DetailPage = () => {
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <StarRating value={averageRating} readonly size="md" showValue count={totalRatings} />
               {item.year && <span className="text-muted-foreground">{item.year}</span>}
-              {item.genre?.map((g) => <Badge key={g} variant="outline" className="border-border/50">{g}</Badge>)}
+              {displayGenres.map((g) => <Badge key={g} variant="outline" className="border-border/50">{g}</Badge>)}
             </div>
 
             <div className="mb-4 flex items-center gap-2">
@@ -249,16 +227,6 @@ const DetailPage = () => {
                   <Plus className="h-5 w-5" /> {t("detail.watchLater")}
                 </Button>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1"
-                onClick={handleTranslate}
-                disabled={translating}
-              >
-                {translating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
-                {t("detail.translate") || "Translate"}
-              </Button>
               <SocialShareButtons title={displayTitle} description={displayDescription || undefined} />
             </div>
 
@@ -312,7 +280,7 @@ const DetailPage = () => {
       </div>
 
       {item.trailer_url && (
-        <TrailerModal open={trailerOpen} onOpenChange={setTrailerOpen} trailerUrl={item.trailer_url} title={item.title} contentId={id} />
+        <TrailerModal open={trailerOpen} onOpenChange={setTrailerOpen} trailerUrl={item.trailer_url} title={displayTitle} contentId={id} />
       )}
     </div>
   );

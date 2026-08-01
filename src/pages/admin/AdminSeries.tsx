@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useLayoutEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -17,6 +17,9 @@ import { toast } from "sonner";
 import { zarynConfirm } from "@/components/ZarynToast";
 import { Plus, Pencil, Trash2, Loader2, Bell, Tv, ChevronUp, ChevronDown, Eye, EyeOff, Wand2, X } from "lucide-react";
 import { ImageUpload, MultiImageUpload } from "@/components/admin/ImageUpload";
+import { AdminSearchBar } from "@/components/admin/AdminSearchBar";
+import { Paginator } from "@/components/Paginator";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { pingGoogleSitemap } from "@/lib/pingSitemap";
 
 interface SeriesItem {
@@ -50,7 +53,14 @@ export default function AdminSeries() {
   const { t } = useLanguage();
   const [items, setItems] = useState<SeriesItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const scrollPosRef = useRef(0);
   const [editing, setEditing] = useState<SeriesItem | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
@@ -78,12 +88,69 @@ export default function AdminSeries() {
   const [savingEpisode, setSavingEpisode] = useState(false);
 
   const fetchItems = async () => {
-    const { data } = await supabase.from("series").select("*").order("created_at", { ascending: false });
-    setItems((data as SeriesItem[]) || []);
+    setSearchLoading(true);
+    // Normalize query: trim + collapse extra whitespace (mirrors public search)
+    const q = debouncedSearch.trim().replace(/\s+/g, " ");
+
+    if (!q) {
+      // No search: direct paginated query on the main table
+      const { data, count } = await supabase
+        .from("series")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+      setItems((data as SeriesItem[]) || []);
+      setTotalCount(count || 0);
+    } else {
+      // ── Smart search: main title + localized titles/content ──
+      // Phase 1: collect matching IDs from the main table (title + year)
+      const yearMatch = /^\d{4}$/.test(q);
+      let mainQuery = supabase.from("series").select("id");
+      if (yearMatch) {
+        mainQuery = mainQuery.or(`title.ilike.%${q}%,year.eq.${q}`);
+      } else {
+        mainQuery = mainQuery.ilike("title", `%${q}%`);
+      }
+      const { data: mainMatches } = await mainQuery;
+
+      // Phase 2: collect matching IDs from content_translations (localized titles/content)
+      const { data: transMatches } = await supabase
+        .from("content_translations")
+        .select("content_id")
+        .eq("content_type", "series")
+        .or(`title.ilike.%${q}%,content.ilike.%${q}%`);
+
+      // Combine + dedupe IDs
+      const idSet = new Set<string>();
+      (mainMatches || []).forEach((m: any) => idSet.add(m.id));
+      (transMatches || []).forEach((m: any) => idSet.add(m.content_id));
+      const allIds = Array.from(idSet);
+      const total = allIds.length;
+
+      // Phase 3: paginate the ID list, then fetch full rows for the current page
+      const pageIds = allIds.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+      let items: SeriesItem[] = [];
+      if (pageIds.length > 0) {
+        const { data } = await supabase
+          .from("series")
+          .select("*")
+          .in("id", pageIds)
+          .order("created_at", { ascending: false });
+        items = (data as SeriesItem[]) || [];
+      }
+
+      setItems(items);
+      setTotalCount(total);
+    }
+
     setLoading(false);
+    setSearchLoading(false);
   };
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => { fetchItems(); }, [debouncedSearch, page]);
+
+  // Reset to page 1 whenever the search query changes
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
 
   const loadTranslations = async (itemId: string) => {
     const { data } = await supabase.from("content_translations").select("*").eq("content_id", itemId).eq("content_type", "series");
@@ -131,9 +198,10 @@ export default function AdminSeries() {
     const copy = { ...langTranslations }; delete copy[code]; setLangTranslations(copy);
   };
 
-  const openCreate = () => { setEditing(null); setForm({ visible: true }); setLangTranslations({}); setExtraLanguages([]); setDialogOpen(true); };
+  const openCreate = () => { scrollPosRef.current = window.scrollY; setEditing(null); setForm({ visible: true }); setLangTranslations({}); setExtraLanguages([]); setDialogOpen(true); };
 
   const openEdit = async (item: SeriesItem) => {
+    scrollPosRef.current = window.scrollY;
     setEditing(item);
     setForm({
       title: item.title, description: item.description || "", genre: (item.genre || []).join(", "),
@@ -161,7 +229,12 @@ export default function AdminSeries() {
     if (editing) {
       payload.updated_at = new Date().toISOString();
       const { error } = await supabase.from("series").update(payload).eq("id", editing.id);
-      if (error) toast.error(error.message); else toast.success(`${t("admin.series")} ${t("admin.update").toLowerCase()}d`);
+      if (error) toast.error(error.message);
+      else {
+        toast.success(`${t("admin.series")} ${t("admin.update").toLowerCase()}d`);
+        // Optimistic update — mutate local list, keep DOM height intact
+        setItems(prev => prev.map(i => i.id === editing.id ? { ...i, ...payload } as SeriesItem : i));
+      }
       savedId = editing.id;
     } else {
       payload.created_by = user?.id;
@@ -170,6 +243,8 @@ export default function AdminSeries() {
       else {
         toast.success(`${t("admin.series")} ${t("admin.create").toLowerCase()}d`);
         savedId = inserted?.id || null;
+        // Optimistic append — insert created item locally, no re-fetch
+        if (inserted) setItems(prev => [inserted as SeriesItem, ...prev]);
         if (notifyUsers && inserted) {
           try {
             await supabase.functions.invoke("notify-new-content", { body: { content_type: "series", content_id: inserted.id, title: inserted.title, description: (inserted as any).description || null, poster_url: (inserted as any).poster_url || null, send_email: sendEmail } });
@@ -193,7 +268,10 @@ export default function AdminSeries() {
       }
     }
 
-    setSaving(false); setDialogOpen(false); fetchItems();
+    setSaving(false); setDialogOpen(false);
+    // List state was updated optimistically above — NO full re-fetch, so the
+    // table DOM height stays intact and scroll position is preserved.
+    // Exact scroll restore is enforced by the useLayoutEffect below.
 
     // Notify Google about the sitemap update (fire-and-forget, never blocks UI).
     if (!editing) pingGoogleSitemap();
@@ -207,16 +285,44 @@ export default function AdminSeries() {
       confirmLabel: "Delete",
       onConfirm: async () => {
         const { error } = await supabase.from("series").delete().eq("id", id);
-        if (error) toast.error(error.message); else { toast.success("Deleted"); fetchItems(); }
+        if (error) toast.error(error.message);
+        else {
+          toast.success("Deleted");
+          // Optimistic delete — remove from local state, keep scroll & DOM height
+          setItems(prev => prev.filter(i => i.id !== id));
+          setTotalCount(prev => Math.max(0, prev - 1));
+        }
       },
     });
   };
+
+  // HARD scroll freeze: whenever the modal closes, restore the exact scroll
+  // position. Radix Dialog (shadcn) applies body overflow:hidden while open and
+  // resets scroll during cleanup — this layout effect runs synchronously BEFORE
+  // paint and retries until Radix finishes, so our saved position always wins.
+  useLayoutEffect(() => {
+    if (dialogOpen) return;
+    const saved = scrollPosRef.current;
+    if (!saved) return;
+    const restore = () => window.scrollTo({ top: saved, behavior: "instant" as ScrollBehavior });
+    restore();
+    const raf = requestAnimationFrame(() => restore());
+    const timers = [50, 150, 300].map(ms => window.setTimeout(() => restore(), ms));
+    return () => {
+      cancelAnimationFrame(raf);
+      timers.forEach(t => window.clearTimeout(t));
+    };
+  }, [dialogOpen]);
 
   const toggleSeriesVisibility = async (item: SeriesItem) => {
     const newVis = !(item.visible !== false);
     const { error } = await supabase.from("series").update({ visible: newVis }).eq("id", item.id);
     if (error) toast.error(error.message);
-    else { toast.success(newVis ? "Series visible" : "Series hidden"); fetchItems(); }
+    else {
+      toast.success(newVis ? "Series visible" : "Series hidden");
+      // Optimistic update — keep DOM height intact
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, visible: newVis } as SeriesItem : i));
+    }
   };
 
   // Episode functions
@@ -318,7 +424,10 @@ export default function AdminSeries() {
           <h1 className="text-3xl font-bold text-gradient-brand font-display">{t("admin.series")}</h1>
           <p className="text-muted-foreground mt-1">{items.length} {t("admin.items")}</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open);
+          // Exact scroll restore is enforced by the useLayoutEffect below.
+        }}>
           <DialogTrigger asChild>
             <Button onClick={openCreate} className="gradient-brand text-primary-foreground">
               <Plus className="mr-2 h-4 w-4" /> {t("admin.addNew")} {t("admin.series")}
@@ -445,6 +554,16 @@ export default function AdminSeries() {
 
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
         <CardContent className="p-0">
+          <div className="p-4 border-b border-border/50">
+            <AdminSearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search series by title, year, or ID..."
+              totalCount={totalCount}
+              filteredCount={items.length}
+              loading={searchLoading}
+            />
+          </div>
           <Table>
             <TableHeader>
               <TableRow className="border-border/50">
@@ -484,10 +603,21 @@ export default function AdminSeries() {
                 </TableRow>
               ))}
               {items.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("admin.noItems")}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  {searchQuery.trim() ? `No results found for "${searchQuery}"` : t("admin.noItems")}
+                </TableCell></TableRow>
               )}
             </TableBody>
           </Table>
+          {totalCount > PAGE_SIZE && (
+            <div className="border-t border-border/50 px-4">
+              <Paginator
+                currentPage={page}
+                totalPages={Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

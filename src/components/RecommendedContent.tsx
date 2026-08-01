@@ -3,6 +3,7 @@ import { ContentCard } from "@/components/ContentCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
 import { Sparkles, Loader2 } from "lucide-react";
 
 interface RecommendedContentProps {
@@ -38,6 +39,11 @@ export function RecommendedContent({ contentType = "movie", limit = 5 }: Recomme
     fetchRecommendations();
   }, [contentType, limit, user?.id]);
 
+  const { getTitle, getGenre, getDescription } = useBatchContentTranslations(
+    items.map(i => i.id),
+    contentType
+  );
+
   if (loading) return null;
   if (items.length === 0) return null;
 
@@ -58,12 +64,12 @@ export function RecommendedContent({ contentType = "movie", limit = 5 }: Recomme
             key={item.id}
             item={{
               id: item.id,
-              title: item.title,
+              title: getTitle(item.id, item.title),
               poster: item.poster_url || "/placeholder.svg",
               rating: item.rating || 0,
               year: item.year || 0,
-              genre: item.genre || [],
-              description: item.description || "",
+              genre: getGenre(item.id, item.genre || []),
+              description: getDescription(item.id, item.description),
               type: contentType,
               trending: item.trending || false,
               trailer_url: item.trailer_url,

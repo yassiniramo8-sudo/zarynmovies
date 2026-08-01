@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { usePagination } from "@/hooks/usePagination";
 import { usePaginationConfig } from "@/hooks/usePaginationConfig";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useCachedListData } from "@/hooks/useCachedListData";
 
 interface AnimeGroup {
   id: string;
@@ -22,29 +23,51 @@ interface AnimeGroup {
 }
 
 const AnimePage = () => {
-  const [items, setItems] = useState<any[]>([]);
-  const [groups, setGroups] = useState<AnimeGroup[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const { items, loading } = useCachedListData<any>(
+    "anime",
+    async () => {
+      const { data } = await supabase.from("anime").select("*").order("episode_number").order("created_at", { ascending: false });
+      return (data as any[]) || [];
+    }
+  );
+  const [groups, setGroups] = useState<AnimeGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [genre, setGenre] = useState("all");
   const [year, setYear] = useState("all");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedGroupsInit, setExpandedGroupsInit] = useState(false);
   const { t } = useLanguage();
   const { config: paginationConfig } = usePaginationConfig();
   const pageSize = paginationConfig.items_per_page;
   const { page, setPage, resetPage } = usePagination(pageSize);
   const debouncedSearch = useDebouncedValue(search, 300);
 
+  // Fetch anime groups separately (cached too)
   useEffect(() => {
-    Promise.all([
-      supabase.from("anime").select("*").order("episode_number").order("created_at", { ascending: false }),
-      supabase.from("anime_groups").select("*").order("sort_order"),
-    ]).then(([animeRes, groupsRes]) => {
-      setItems(animeRes.data || []);
-      setGroups(groupsRes.data || []);
-      setExpandedGroups(new Set((groupsRes.data || []).map((g: AnimeGroup) => g.id)));
-      setLoading(false);
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = sessionStorage.getItem("zaryn_list_cache_anime_groups");
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (Array.isArray(cached)) {
+            setGroups(cached);
+            setExpandedGroups(new Set(cached.map((g: AnimeGroup) => g.id)));
+            setGroupsLoading(false);
+          }
+        }
+        const { data } = await supabase.from("anime_groups").select("*").order("sort_order");
+        if (cancelled) return;
+        setGroups((data as AnimeGroup[]) || []);
+        setExpandedGroups(new Set((data || []).map((g: AnimeGroup) => g.id)));
+        setGroupsLoading(false);
+        try { sessionStorage.setItem("zaryn_list_cache_anime_groups", JSON.stringify(data || [])); } catch {}
+      } catch {
+        if (!cancelled) setGroupsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const allGenres = useMemo(() => [...new Set(items.flatMap((m) => m.genre || []))].sort(), [items]);
@@ -121,7 +144,10 @@ const AnimePage = () => {
     />
   );
 
-  if (loading)
+  // Show a subtle inline loader only when there's NO cached data yet.
+  // If cached items exist, render the grid immediately (preserving DOM height
+  // for scroll restoration on BACK navigation).
+  if (loading && items.length === 0)
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

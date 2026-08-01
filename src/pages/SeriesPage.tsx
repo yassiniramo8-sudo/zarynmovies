@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,6 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagination } from "@/hooks/usePagination";
 import { usePaginationConfig } from "@/hooks/usePaginationConfig";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useCachedListData } from "@/hooks/useCachedListData";
 
 interface SeriesItem {
   id: string;
@@ -26,8 +27,6 @@ interface SeriesItem {
 }
 
 const SeriesPage = () => {
-  const [allItems, setAllItems] = useState<SeriesItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("all");
   const [year, setYear] = useState("all");
@@ -37,17 +36,19 @@ const SeriesPage = () => {
   const { page, setPage, resetPage } = usePagination(pageSize);
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  useEffect(() => {
-    supabase
-      .from("series")
-      .select("id,title,poster_url,rating,year,genre,description,trending,pinned,trailer_url")
-      .eq("visible", true)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setAllItems((data as SeriesItem[]) || []);
-        setLoading(false);
-      });
-  }, []);
+  // Cached list data — renders cached items immediately on BACK navigation
+  // (preserving DOM height for scroll restoration) while fresh data loads.
+  const { items: allItems, loading } = useCachedListData<SeriesItem>(
+    "series",
+    async () => {
+      const { data } = await supabase
+        .from("series")
+        .select("id,title,poster_url,rating,year,genre,description,trending,pinned,trailer_url")
+        .eq("visible", true)
+        .order("created_at", { ascending: false });
+      return (data as SeriesItem[]) || [];
+    }
+  );
 
   const allGenres = useMemo(() => [...new Set(allItems.flatMap((m) => m.genre || []))].sort(), [allItems]);
   const allYears = useMemo(
@@ -82,7 +83,10 @@ const SeriesPage = () => {
     [resetPage]
   );
 
-  if (loading)
+  // Show a subtle inline loader only when there's NO cached data yet.
+  // If cached items exist, render the grid immediately (preserving DOM height
+  // for scroll restoration on BACK navigation).
+  if (loading && allItems.length === 0)
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

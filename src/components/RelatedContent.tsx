@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ContentCard } from "@/components/ContentCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useBatchContentTranslations } from "@/hooks/useBatchContentTranslations";
 
 interface RelatedContentProps {
   currentId: string;
@@ -50,6 +51,11 @@ export function RelatedContent({ currentId, contentType, genres, limit = 6 }: Re
     fetchRelated();
   }, [currentId, table, genres, limit]);
 
+  const { getDescription, getTitle, getGenre } = useBatchContentTranslations(
+    items.map(i => i.id),
+    contentType
+  );
+
   if (!loading && items.length === 0) return null;
 
   return (
@@ -70,12 +76,12 @@ export function RelatedContent({ currentId, contentType, genres, limit = 6 }: Re
               key={item.id}
               item={{
                 id: item.id,
-                title: item.title,
+                title: getTitle(item.id, item.title),
                 poster: item.poster_url || "/placeholder.svg",
                 rating: item.rating || 0,
                 year: item.year || 0,
-                genre: item.genre || [],
-                description: item.description || "",
+                genre: getGenre(item.id, item.genre || []),
+                description: getDescription(item.id, item.description),
                 type: contentType,
                 trending: item.trending || false,
                 trailer_url: item.trailer_url,

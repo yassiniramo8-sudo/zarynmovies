@@ -8,12 +8,14 @@ interface ContentTranslation {
   title: string;
   description: string | null;
   content: string | null;
+  genre: string[] | null;
   content_type: string;
 }
 
 /**
  * Hook to fetch cached translations for movies/series/anime/articles.
- * Movie titles are NEVER translated — only descriptions.
+ * Titles and genres are fully translatable per-locale, with fallback
+ * to the original (main) values when a translation is missing.
  */
 export function useContentTranslations(contentId: string | undefined, contentType: string) {
   const { language } = useLanguage();
@@ -49,19 +51,14 @@ export function useContentTranslations(contentId: string | undefined, contentTyp
   }, [contentId, contentType, targetLang]);
 
   /**
-   * Get translated description/content for an item.
-   * Movie titles are NEVER translated.
+   * Get translated title/content field for an item.
+   * Falls back to the original (main language) value when no translation exists.
    */
   const getTranslatedField = useCallback(
     (
       original: { title?: string; description?: string | null; content?: string | null },
       field: "title" | "description" | "content"
     ): string => {
-      // Movie titles must NEVER be translated
-      if (field === "title" && contentType === "movie") {
-        return original.title || "";
-      }
-
       // For English, use original
       if (targetLang === "en") {
         return (original[field] as string) || "";
@@ -78,8 +75,28 @@ export function useContentTranslations(contentId: string | undefined, contentTyp
       // Fallback to original
       return (original[field] as string) || "";
     },
-    [translations, targetLang, contentType]
+    [translations, targetLang]
   );
 
-  return { getTranslatedField, targetLang, loading, translations };
+  /**
+   * Get translated genre array for an item.
+   * Falls back to the original genre array when no translation exists.
+   */
+  const getGenre = useCallback(
+    (originalGenre: string[] | null | undefined): string[] => {
+      if (targetLang === "en") {
+        return originalGenre || [];
+      }
+
+      const trans = translations[targetLang];
+      if (trans?.genre && trans.genre.length > 0) {
+        return trans.genre;
+      }
+
+      return originalGenre || [];
+    },
+    [translations, targetLang]
+  );
+
+  return { getTranslatedField, getGenre, targetLang, loading, translations };
 }

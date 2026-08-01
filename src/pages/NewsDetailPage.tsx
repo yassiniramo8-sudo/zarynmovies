@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Calendar, ExternalLink, Tag, Loader2, Globe, Languages } from "lucide-react";
+import { ArrowLeft, Calendar, ExternalLink, Tag, Loader2, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,6 @@ import { useNewsTranslations } from "@/hooks/useNewsTranslations";
 import { SEOHead } from "@/components/SEOHead";
 import { AdvertisementRenderer } from "@/components/AdvertisementRenderer";
 import { SocialShareButtons } from "@/components/SocialShareButtons";
-import { toast } from "sonner";
 
 const NEWS_LANG_OPTIONS = [
   { code: "en", label: "English", flag: "🇬🇧" },
@@ -22,7 +21,6 @@ const NewsDetailPage = () => {
   const { id, lang: urlLang } = useParams();
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [translating, setTranslating] = useState(false);
   const { language, setLanguage } = useLanguage();
 
   useEffect(() => {
@@ -50,29 +48,6 @@ const NewsDetailPage = () => {
       });
   }, [id]);
 
-  const handleTranslate = useCallback(async () => {
-    if (!id) return;
-    setTranslating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("translate-news", {
-        body: { newsIds: [id] },
-      });
-      if (error) throw error;
-      toast.success(
-        newsLang === "ar" ? `تمت الترجمة بنجاح (${data?.translated || 0} ترجمة)` :
-        newsLang === "fr" ? `Traduit avec succès (${data?.translated || 0} traductions)` :
-        newsLang === "es" ? `Traducido con éxito (${data?.translated || 0} traducciones)` :
-        `Translated successfully (${data?.translated || 0} translations)`
-      );
-      // Reload page to show new translations
-      window.location.reload();
-    } catch (e: any) {
-      toast.error(e.message || "Translation failed");
-    } finally {
-      setTranslating(false);
-    }
-  }, [id, newsLang]);
-
   if (loading) return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!item) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Article not found</div>;
 
@@ -82,7 +57,6 @@ const NewsDetailPage = () => {
 
   const backLabels: Record<string, string> = { en: "Back to News", ar: "العودة للأخبار", fr: "Retour aux actualités", es: "Volver a noticias" };
   const sourceLabels: Record<string, string> = { en: "Original Source", ar: "المصدر الأصلي", fr: "Source originale", es: "Fuente original" };
-  const translateLabels: Record<string, string> = { en: "Translate", ar: "ترجمة", fr: "Traduire", es: "Traducir" };
 
   return (
     <>
@@ -99,18 +73,6 @@ const NewsDetailPage = () => {
           </Button>
 
           <div className="flex items-center gap-2">
-            {/* Translate button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTranslate}
-              disabled={translating}
-              className="gap-1"
-            >
-              {translating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Languages className="h-4 w-4" />}
-              {translateLabels[newsLang] || translateLabels.en}
-            </Button>
-
             {/* Language switcher */}
             <div className="flex items-center gap-1">
               <Globe className="h-4 w-4 text-muted-foreground" />

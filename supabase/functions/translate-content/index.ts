@@ -10,20 +10,24 @@ const TARGET_LANGUAGES = ["ar", "en", "fr", "es"];
 const LANG_NAMES: Record<string, string> = { ar: "Arabic", en: "English", fr: "French", es: "Spanish" };
 
 // Content types where title should NOT be translated
-const NO_TITLE_TRANSLATION = ["movie"];
+const NO_TITLE_TRANSLATION: string[] = [];
 
 async function translateText(
-  texts: { title: string; description: string },
+  texts: { title: string; description: string; genre?: string[] },
   fromLang: string,
   toLang: string,
   skipTitle: boolean
-): Promise<{ title: string; description: string } | null> {
+): Promise<{ title: string; description: string; genre?: string[] } | null> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) return null;
 
   const titleInstruction = skipTitle
     ? `DO NOT translate the title — keep it exactly as provided.`
-    : `Translate the title naturally.`;
+    : `Translate the title naturally. Keep proper nouns (names, places) transliterated.`;
+
+  const genreInstruction = texts.genre?.length
+    ? `Also translate the array of genre keywords to ${LANG_NAMES[toLang]}. Keep them as comma-separated short keywords.`
+    : `If genre is provided as an array, translate each keyword. Otherwise leave it empty.`;
 
   try {
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -37,11 +41,11 @@ async function translateText(
         messages: [
           {
             role: "system",
-            content: `You are a professional translator. Translate from ${LANG_NAMES[fromLang] || fromLang} to ${LANG_NAMES[toLang]}. ${titleInstruction} Return ONLY JSON with "title" and "description" keys. Preserve meaning and tone.`,
+            content: `You are a professional translator. Translate from ${LANG_NAMES[fromLang] || fromLang} to ${LANG_NAMES[toLang]}. ${titleInstruction} ${genreInstruction} Return ONLY JSON with "title", "description" and "genre" keys. "genre" must be an array of translated keywords. Preserve meaning and tone.`,
           },
           {
             role: "user",
-            content: `Title: ${texts.title}\nDescription: ${texts.description.substring(0, 3000)}`,
+            content: `Title: ${texts.title}\nDescription: ${texts.description.substring(0, 3000)}\nGenre: ${(texts.genre || []).join(", ")}`,
           },
         ],
         tools: [
@@ -55,6 +59,11 @@ async function translateText(
                 properties: {
                   title: { type: "string" },
                   description: { type: "string" },
+                  genre: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Translated genre keywords",
+                  },
                 },
                 required: ["title", "description"],
                 additionalProperties: false,
@@ -74,7 +83,12 @@ async function translateText(
     const data = await response.json();
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
     if (toolCall) {
-      return JSON.parse(toolCall.function.arguments);
+      const parsed = JSON.parse(toolCall.function.arguments);
+      return {
+        title: parsed.title,
+        description: parsed.description,
+        genre: Array.isArray(parsed.genre) ? parsed.genre : undefined,
+      };
     }
   } catch (e) {
     console.error(`Translation error:`, e);
@@ -91,7 +105,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const body = await req.json().catch(() => ({}));
-    const { contentId, contentType, title, description, targetLanguage, forceTranslate } = body;
+    const { contentId, contentType, title, description, genre, targetLanguage, forceTranslate } = body;
 
     if (!contentId || !contentType || !title) {
       return new Response(JSON.stringify({ error: "contentId, contentType, and title are required" }), {
@@ -144,7 +158,7 @@ serve(async (req) => {
 
     const promises = langsToTranslate.map(async (lang) => {
       const result = await translateText(
-        { title, description: description || "" },
+        { title, description: description || "", genre: Array.isArray(genre) ? genre : [] },
         originalLang,
         lang,
         skipTitle
@@ -165,6 +179,7 @@ serve(async (req) => {
             language: lang,
             title: skipTitle ? title : result.title,
             description: result.description,
+            genre: Array.isArray(result.genre) && result.genre.length > 0 ? result.genre : null,
           });
         }
       }

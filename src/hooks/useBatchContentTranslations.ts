@@ -7,12 +7,13 @@ interface ContentTranslationRow {
   language: string;
   title: string;
   description: string | null;
+  genre: string[] | null;
   content_type: string;
 }
 
 /**
  * Hook to fetch cached translations for a LIST of content items (movies/series/anime).
- * Movie/Series/Anime titles are NEVER translated — only descriptions.
+ * Titles and genres are fully translatable per-locale, with fallback to original values.
  */
 export function useBatchContentTranslations(
   contentIds: string[],
@@ -38,7 +39,7 @@ export function useBatchContentTranslations(
     setLoading(true);
     supabase
       .from("content_translations")
-      .select("content_id, language, title, description, content_type")
+      .select("content_id, language, title, description, genre, content_type")
       .eq("content_type", contentType)
       .eq("language", targetLang)
       .in("content_id", contentIds)
@@ -72,5 +73,15 @@ export function useBatchContentTranslations(
     [translations, targetLang]
   );
 
-  return { getDescription, getTitle, targetLang, loading };
+  const getGenre = useCallback(
+    (id: string, originalGenre: string[] | null): string[] => {
+      if (targetLang === "en") return originalGenre || [];
+      const trans = translations[id];
+      if (trans?.genre && trans.genre.length > 0) return trans.genre;
+      return originalGenre || [];
+    },
+    [translations, targetLang]
+  );
+
+  return { getDescription, getTitle, getGenre, targetLang, loading };
 }

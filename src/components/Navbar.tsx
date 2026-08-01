@@ -91,12 +91,10 @@ export function Navbar() {
 
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
-          <div className="hidden sm:block">
-            <LanguageSwitcher />
-          </div>
+        <div className="flex items-center gap-2 p-1.5">
+          <LanguageSwitcher />
 
-          <ThemeToggle className="hidden sm:inline-flex" />
+          <ThemeToggle />
 
           {user && <NotificationBell />}
 
